@@ -1,0 +1,13 @@
+.git
+.github
+pycache
+*.pyc
+*.pyo
+*.pyd
+env/
+.env/
+venv/
+.venv/
+README.md
+.dockerignore
+Dockerfile
