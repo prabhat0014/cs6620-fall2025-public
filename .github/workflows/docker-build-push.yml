@@ -33,3 +33,34 @@ jobs:
             build.workflow=${{ github.workflow }}
             build.run_id=${{ github.run_id }}
             build.run_number=${{ github.run_number }}
+  
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+ 
+      - name: Deploy to EC2 via SSM
+        id: deploy
+        env:
+          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/cs6620-app:latest
+          INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+        run: |
+          # Deployment: pull the latest image from Docker Hub on the EC2 instance,
+          # replace the running container, and serve it on port 80 (-> container port 5000)
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy latest cs6620-app image from GitHub Actions run ${{ github.run_number }}" \
+            --parameters "commands=[\"docker pull $IMAGE\",\"docker stop cs6620-app || true\",\"docker rm cs6620-app || true\",\"docker run -d --name cs6620-app --restart unless-stopped -p 80:5000 $IMAGE\"]" \
+            --query "Command.CommandId" \
+            --output text)
+ 
+          echo "SSM command sent. Command ID: $COMMAND_ID"
+          echo "command_id=$COMMAND_ID" >> "$GITHUB_OUTPUT"
